@@ -1,0 +1,152 @@
+﻿@using Masuit.MyBlogs.Core.Models.DTO
+@using Masuit.MyBlogs.Core.Models.ViewModel
+@using Masuit.Tools
+@using Microsoft.AspNetCore.Mvc.Rendering
+@model SearchResult<Masuit.MyBlogs.Core.Models.DTO.PostDto>
+@{
+  ViewBag.Title = "站内搜索：" + ViewBag.Keyword;
+  Layout = "~/Views/Shared/_Layout.cshtml";
+  IList<KeywordsRank> hotSearches = ViewBag.hotSearches;
+  IList<string> relateKeywords = ViewBag.RelateKeywords;
+  AdvertisementDto ad = ViewBag.Ads;
+}
+<div class="container min-height610">
+  <ol class="breadcrumb">
+    <li>
+      <a asp-action="Index" asp-controller="Home">首页</a>
+    </li>
+    <li class="current">
+      <em>@ViewBag.Title</em>
+    </li>
+  </ol>
+  <div class="animated fadeInRight wrapper wrapper-content">
+    <div class="row">
+      <div class="col-sm-12">
+        @if (!string.IsNullOrEmpty(ViewBag.Keyword)) {
+          <small>搜索用时(@Model.Elapsed 毫秒)</small>
+        }
+        <div class="search-form">
+          <form action="/search" method="get">
+            <div class="input-group">
+              <input class="form-control input-lg" id="search" maxlength="32" name="wd" placeholder="你要查找的关键词，支持部分指令：intitle，content，如：intitle:会声会影 content:懒得勤快，指令支持组合" type="text" value="@ViewBag.Keyword">
+              <div class="input-group-btn">
+                <button class="btn btn-lg btn-primary" type="submit">搜索</button>
+              </div>
+            </div>
+          </form>
+          @if (hotSearches.Any()) {
+              <div class="copyright-card">
+                <h2 class="recommend-title">搜索推荐：</h2>
+                @for (var index = 0; index < hotSearches.Count; index++) {
+                    <a asp-action="Search" asp-route-wd="@hotSearches[index].Keywords" class="margin-bot10 tag-cloud-item tag@(index+1)">@hotSearches[index].Keywords (@hotSearches[index].Count)</a>
+                }
+              </div>
+          }
+        </div>
+        @if (Model.Results.Any()) {
+          <div class="hr-line-dashed"></div>
+          var rnd = new Random().Next(Model.Results.Count > 2 ? 2 : 1, Model.Results.Count);
+          for (var i = 0; i < Model.Results.Count; i++) {
+            if (rnd > 1 && rnd == i && ad != null) {
+              await Html.RenderPartialAsync("_ArticleListAdvertisement", ad);
+            }
+
+            var p = Model.Results[i];
+            <div class="article-card" style="margin: 15px 0;">
+              <div class="article-content">
+                <a asp-action="Details" asp-controller="Post" asp-route-id="@p.Id" asp-route-kw="@ViewBag.Keyword" class="article-title" target="_blank">
+                  @Html.Raw(p.Title)
+                </a>
+                <div class="meta-row">
+                  <span class="author">
+                    <a asp-action="Author" asp-controller="Home" asp-route-author="@(p.Modifier ?? p.Author)">@(p.Modifier ?? p.Author)</a>
+                  </span>
+                  <span>
+                    更新时间：
+                    <a asp-action="Archieve" asp-controller="Home" asp-route-dd="@p.ModifyDate.Day" asp-route-mm="@p.ModifyDate.Month" asp-route-mode="@nameof(p.ModifyDate)" asp-route-yyyy="@p.ModifyDate.Year">
+                      <time>@p.ModifyDate.ToString("yyyy-MM-dd")</time>
+                    </a>
+                  </span>
+                  <span class="category">
+                    @{
+                      await Html.RenderPartialAsync("CategoryPath", p.Category);
+                    }
+                  </span>
+                </div>
+                <div class="summary"> @Html.Raw(p.Content) </div>
+              </div>
+            </div>
+          }
+        }
+        @if (relateKeywords?.Count > 0) {
+          <div class="copyright-card">
+            <h2 class="recommend-title">相关搜索：</h2>
+            @for (var index = 0; index < relateKeywords.Count; index++) {
+                <a asp-action="Search" asp-route-wd="@relateKeywords[index]" class="margin-bot10 tag-cloud-item tag@(index+1)">@relateKeywords[index]</a>
+            }
+          </div>
+        }
+        @if (!string.IsNullOrEmpty((string) ViewBag.ErrorMsg)) {
+          <h3>@ViewBag.ErrorMsg</h3>
+        }
+        @*分页组件*@
+        @{
+          int size = ViewBag.PageSize;
+          int pages = Math.Ceiling(Model.Total / (size > 0 ? size : 10.0)).ToInt32();
+          var page = Context.Request.Query["page"].ToString().ToInt32();
+          int current = page > 0 ? page : 1;
+          int pageStart = current - 3 > 0 ? current - 3 : 1;
+          int pageEnd = current + 3 >= pages ? pages : current + 3;
+          if (pageEnd - pageStart < 7) {
+            if (pageStart == 1) {
+              pageEnd = pageStart + 4 >= pages ? pages : pageStart + 4;
+            } else {
+              pageStart = pageEnd - 4 > 0 ? pageEnd - 4 : 1;
+            }
+          }
+        }
+        @if (pages > 1) {
+          <div class="article-list-footer">
+            <div class="pagination">
+              @if (current == 1) {
+                <button class="disabled page-btn" disabled="disabled">&laquo;</button>
+              } else {
+                <a asp-action="Search" asp-route-wd="@ViewBag.Keyword">
+                  <button class="page-btn">首页</button>
+                </a>
+                <a asp-action="Search" asp-route-page="@(page - 1 <= 0 ? 1 : page - 1)" asp-route-wd="@ViewBag.Keyword">
+                  <button class="page-btn">&laquo;</button>
+                </a>
+              }
+              @if (pageStart > 1) {
+                <span class="ellipsis">...</span>
+              }
+              @for (int i = pageStart; i <= pageEnd; i++) {
+                if (i == current) {
+                  <button class="active page-btn">@i</button>
+                } else {
+                  <a asp-action="Search" asp-route-page="@i" asp-route-wd="@ViewBag.Keyword">
+                    <button class="page-btn">@i</button>
+                  </a>
+                }
+              }
+              @if (pageEnd < pages) {
+                <span class="ellipsis">...</span>
+              }
+              @if (current == pages) {
+                <button class="disabled page-btn" disabled="disabled">&raquo;</button>
+              } else {
+                <a asp-action="Search" asp-route-page="@(current + 1)" asp-route-wd="@ViewBag.Keyword">
+                  <button class="page-btn">&raquo;</button>
+                </a>
+                <a asp-action="Search" asp-route-page="@pages" asp-route-wd="@ViewBag.Keyword">
+                  <button class="page-btn">最后一页</button>
+                </a>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>

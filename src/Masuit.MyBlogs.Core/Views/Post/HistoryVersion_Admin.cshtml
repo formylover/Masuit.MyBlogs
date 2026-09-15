@@ -1,0 +1,171 @@
+﻿@using Masuit.MyBlogs.Core.Common
+@using Masuit.MyBlogs.Core.Models.DTO
+@using Masuit.MyBlogs.Core.Models.Entity
+@using Masuit.MyBlogs.Core.Models.ViewModel
+@using Masuit.Tools.Core.Net
+@model Masuit.MyBlogs.Core.Models.Entity.PostHistoryVersion
+@{
+  ViewBag.Title = Model.Post.Title + "于" + Model.ModifyDate.ToTimeZoneF(Context.Session.Get<string>(SessionKey.TimeZone)) + "的历史版本：" + Model.Title;
+  Layout = "~/Views/Shared/_Layout.cshtml";
+  string[] colors = {
+    "success",
+    "info",
+    "primary",
+    "warning",
+    "danger",
+    "default",
+    "primary"
+  };
+  AdvertisementDto ad = ViewBag.Ads;
+}
+<div class="container" id="postApp">
+  <ol class="breadcrumb">
+    <li>
+      <a asp-action="Index" asp-controller="Home">首页</a>
+    </li>
+    <li>
+      <a asp-action="Post" asp-controller="Home">文章列表</a>
+    </li>
+    @if (Model.Category.ParentId > 0) {
+      if (Model.Category.Parent.ParentId > 0) {
+        <li>
+          <a asp-action="Category" asp-controller="Home" asp-route-id="@Model.Category.Parent.ParentId">@Model.Category.Parent.Parent.Name</a>
+        </li>
+      }
+
+      <li>
+        <a asp-action="Category" asp-controller="Home" asp-route-id="@Model.Category.ParentId">@Model.Category.Parent.Name</a>
+      </li>
+    }
+    <li>
+      <a asp-action="Category" asp-controller="Home" asp-route-id="@Model.CategoryId">@Model.Category.Name</a>
+    </li>
+    <li>
+      @Html.ActionLink(Model.Post.Title.Length > 20 ? Model.Post.Title.Substring(0, 20) + "..." : Model.Post.Title, "Details", "Post", new {
+        id = Model.PostId
+      }, null)
+    </li>
+    <li>
+      <a asp-action="History" asp-controller="Post" asp-route-id="@Model.PostId">历史版本</a>
+    </li>
+    <li class="current">
+      <em>@(Model.Title.Length > 35 ? Model.Title.Substring(0, 35) + "..." : Model.Title)</em>
+    </li>
+  </ol>
+  <div class="main-container">
+    <!-- 头部信息 -->
+    <section class="article-header">
+      <div class="article-title-row">
+        <h2 class="article-title">@Model.Title</h2>
+      </div>
+      <!-- 文章标签展示区，可放在文章信息区或内容区上方，支持多个标签 -->
+      <div class="article-meta-row">
+        <div>
+          <span class="modifier">
+            <a asp-action="Author" asp-controller="Home" asp-route-author="@Model.Modifier">@Model.Modifier</a>
+          </span>
+          <span>
+            修改于
+            <a asp-action="Archieve" asp-controller="Home" asp-route-dd="@Model.ModifyDate.Day" asp-route-mm="@Model.ModifyDate.Month" asp-route-mode="@nameof(Model.ModifyDate)" asp-route-yyyy="@Model.ModifyDate.Year">
+              <time class="text-success">@Model.ModifyDate.ToTimeZoneF(Context.Session.Get<string>(SessionKey.TimeZone))</time>
+            </a>
+          </span>
+        </div>
+      </div>
+      <div class="article-meta-row">
+        <div class="article-tags-row">
+          <span style="font-weight:600;color:#1566b6;font-size:1.06rem;">
+            <i class="icon-map-pin"></i>原分类：
+            <span class="article-tag">
+              @{
+                await Html.RenderPartialAsync("CategoryPath", Model.Category);
+              }
+            </span>
+          </span>
+        </div>
+        @if (Model.Seminar.Any()) {
+          <div class="article-tags-row">
+            <span style="font-weight:600;color:#1566b6;font-size:1.06rem;">原所属专题：</span>
+            @{
+              var seminars = Model.Seminar;
+              foreach (var s in seminars) {
+                <span class="article-tag">
+                  <a asp-action="Index" asp-controller="Seminar" asp-route-id="@s.Id">@s.Title</a>
+                </span>
+              }
+            }
+          </div>
+        }
+        @{
+          if (!string.IsNullOrEmpty(Model.Label)) {
+            <div class="article-tags-row">
+              <span style="font-weight:600;color:#1566b6;font-size:1.06rem;">标签：</span>
+              @foreach (string s in Model.Label.Split([',', '，'], StringSplitOptions.RemoveEmptyEntries)) {
+                <span class="article-tag">
+                  <a asp-action="Tag" asp-controller="Home" asp-route-tag="@s">
+                    @s
+                  </a>
+                </span>
+              }
+            </div>
+          }
+        }
+      </div>
+      <div class="article-meta-row">
+        <div class="article-ops-row">
+          <button @@click="deleteVersion(@Model.Id,@Model.PostId)" class="article-op-btn">删除此版本</button>
+          <button @@click="revertVersion(@Model.Id,@Model.PostId)" class="article-op-btn">还原到此版本</button>
+        </div>
+      </div>
+    </section>
+    <!-- 内容区 -->
+    <section class="article-content-card">
+      <div class="article-content">
+        <div class="old-card">
+          您目前正在查看该文章的历史版本，文章的历史版本可能无法为您提供最准确及时的资讯，不具备任何参考价值，
+          <a asp-action="Details" asp-controller="Post" asp-route-id="@Model.PostId">点击前往</a>该文章的最新版本。
+        </div>
+        @Html.Raw(Model.Content)
+        @Html.Raw(Model.ProtectContent)
+      </div>
+      @if (ad != null) {
+        await Html.RenderPartialAsync("_ArticleListAdvertisement", ad);
+      }
+      <div class="article-footer-row">
+        <div class="nav-links">
+          前一版本：
+          @{
+            PostHistoryVersion prev = ViewBag.Prev;
+            if (prev != null) {
+              <a asp-action="HistoryVersion" asp-controller="Post" asp-route-hid="@prev.Id" asp-route-id="@prev.PostId" class="nav-link">@prev.Title</a>
+            } else {
+              <a>没有了</a>
+            }
+          }
+        </div>
+        <div class="nav-links">
+          下一版本：
+          @{
+            PostHistoryVersion next = ViewBag.Next;
+            if (next != null) {
+              <a asp-action="HistoryVersion" asp-controller="Post" asp-route-hid="@next.Id" asp-route-id="@next.PostId" class="nav-link">@next.Title</a>
+            } else {
+              <a>没有了</a>
+            }
+          }
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<environment names="Development">
+  <link href="~/UEditorPlus/third-party/SyntaxHighlighter/shCoreDefault.css" rel="stylesheet"/>
+  <script src="/UEditorPlus/third-party/SyntaxHighlighter/shCore.js"></script>
+  <link href="~/Assets/auto-toc/auto-toc.css" rel="stylesheet"/>
+  <script src="/Assets/auto-toc/auto-toc.js"></script>
+  <script src="/Scripts/global/article.js"></script>
+</environment>
+<environment names="Stage,Production">
+  @await Styles.RenderAsync("/bundles/article.css")
+  @await Scripts.RenderAsync("/bundles/article.js")
+</environment>

@@ -1,0 +1,91 @@
+﻿@using Masuit.MyBlogs.Core.Models.DTO
+@using Masuit.MyBlogs.Core.Models.ViewModel
+@using Masuit.Tools.Core.Net
+@using Masuit.MyBlogs.Core.Models
+@using Masuit.MyBlogs.Core.Models.Enum
+@using Masuit.Tools.Systems
+@using Masuit.MyBlogs.Core.Common
+@using Microsoft.AspNetCore.Mvc.TagHelpers
+@using Markdig
+@model Masuit.Tools.Models.PagedList<Masuit.MyBlogs.Core.Models.DTO.PostDto>
+@{
+  Layout = "~/Views/Shared/_Layout.cshtml";
+  Random r = new Random();
+  UserInfoDto user = Context.Session.Get<UserInfoDto>(SessionKey.UserInfo) ?? new UserInfoDto();
+  AdvertisementDto ad = ViewBag.Ads;
+  Pagination page = ViewData["page"] as Pagination;
+}
+<style>
+    .bg-title {
+        height: 50vh;
+        max-height: 400px;
+        position: relative;
+        background: url(/Content/images/@(r.Next(1, 9)).jpg) no-repeat center;
+        background-size:cover;
+        background-attachment: fixed;
+            margin-bottom: 10px;
+    }
+    .header-content {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%,-50%);
+    }
+    .header-content .divider {
+        width: inherit;
+        height: 20px;
+        margin-top: 20px;
+        border-top: 3px solid rebeccapurple;
+    }
+</style>
+<div class="main-container">
+  <ol class="breadcrumb">
+    <li>
+      <a asp-action="Index" asp-controller="Home">首页</a>
+    </li>
+    <li class="current">
+      <em>专题_@ViewBag.Title</em>
+    </li>
+  </ol>
+</div>
+<div class="bg-title">
+  <div class="header-content text-center">
+    <h2 class="size48">
+      @ViewBag.Title
+      @if (CommonHelper.SystemSettings.GetOrAdd("EnableRss", "true") == "true") {
+        <a asp-action="SeminarRss" asp-controller="Subscribe" asp-route-id="@ViewBag.Id" class="btn btn-danger btn-lg" target="_blank">
+          <i class="icon-rss4"></i>
+        </a>
+      }
+    </h2>
+    <div class="divider"></div>
+    <p class="size24">
+      @Html.Raw(ViewBag.SubTitle)
+    </p>
+  </div>
+</div>
+<div class="main-container">
+  <div class="recommend-card" style="margin-bottom: 12px;">
+    <h2 class="recommend-title" id="recommend">专题描述：</h2>
+    @Html.Raw(Markdown.ToHtml(ViewBag.Desc))
+  </div>
+  <div class="animated article-list blog bounceInUp wrapper-content">
+    @if (Model.Data.Any()) {
+      var rnd = new Random().Next(Model.CurrentCount > 2 ? 2 : 0, Model.CurrentCount);
+      for (var i = 0; i < Model.CurrentCount; i++) {
+        if (rnd > 2 && rnd == i && ad != null) {
+          await Html.RenderPartialAsync("_ArticleListAdvertisement", ad);
+        }
+
+        var post = Model.Data[i];
+        await Html.RenderPartialAsync(user.IsAdmin ? "_ArticleListItem_Admin" : "_ArticleListItem", post);
+      }
+    } else {
+      <h3>
+        Oops！抱歉~本专题没有收录相关的文章或资源！如果您有相关的结果，您可以
+        <a asp-action="Publish" asp-controller="Post" class="btn btn-info btn-lg">点击这里</a> 投稿哦！
+      </h3>
+    }
+    @{ await Html.RenderPartialAsync("_Pagination", page); }
+  </div>
+</div>

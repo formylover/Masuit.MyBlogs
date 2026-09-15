@@ -1,0 +1,198 @@
+﻿using System.Net;
+using Autofac;
+using CLRStats;
+using Dispose.Scope.AspNetCore;
+using FreeRedis;
+using Hangfire;
+using Hangfire.MemoryStorage;
+using Masuit.LuceneEFCore.SearchEngine;
+using Masuit.LuceneEFCore.SearchEngine.Extensions;
+using Masuit.MyBlogs.Core.Common.Mails;
+using Masuit.MyBlogs.Core.Configs;
+using Masuit.MyBlogs.Core.Extensions;
+using Masuit.MyBlogs.Core.Extensions.Firewall;
+using Masuit.MyBlogs.Core.Extensions.Hangfire;
+using Masuit.Tools.Mime;
+using Masuit.Tools.Config;
+using Masuit.Tools.Core.AspNetCore;
+using Microsoft.Extensions.Primitives;
+using Newtonsoft.Json;
+using System.Text.RegularExpressions;
+using Masuit.Tools.AspNetCore.ModelBinder;
+using EFCoreSecondLevelCacheInterceptor;
+
+namespace Masuit.MyBlogs.Core;
+
+/// <summary>
+/// asp.net core核心配置
+/// </summary>
+public class Startup
+{
+    /// <summary>
+    /// 配置中心
+    /// </summary>
+    public IConfiguration Configuration { get; set; }
+
+    private readonly IWebHostEnvironment _env;
+
+    /// <summary>
+    /// asp.net core核心配置
+    /// </summary>
+    /// <param name="configuration"></param>
+    /// <param name="env"></param>
+    public Startup(IConfiguration configuration, IWebHostEnvironment env)
+    {
+        _env = env;
+        ChangeToken.OnChange(configuration.GetReloadToken, BindConfig);
+        BindConfig();
+        return;
+
+        void BindConfig()
+        {
+            Configuration = configuration;
+            AppConfig.ConnString = configuration["Database:" + nameof(AppConfig.ConnString)];
+            AppConfig.Redis = configuration[nameof(AppConfig.Redis)];
+            AppConfig.TrueClientIPHeader = configuration[nameof(AppConfig.TrueClientIPHeader)] ?? "CF-Connecting-IP";
+            AppConfig.EnableIPDirect = bool.Parse(configuration[nameof(AppConfig.EnableIPDirect)] ?? "false");
+            configuration.Bind("Imgbed:Gitlabs", AppConfig.GitlabConfigs);
+            configuration.AddToMasuitTools();
+        }
+    }
+
+    /// <summary>
+    /// ConfigureServices
+    /// </summary>
+    /// <param name="services"></param>
+    /// <returns></returns>
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddCors(options =>
+        {
+            options.AddPolicy("AllowAny", builder =>
+            {
+                builder.SetIsOriginAllowed(_ => true).AllowAnyMethod().AllowAnyHeader().AllowCredentials().WithExposedHeaders(
+                    "X-MiniProfiler-Ids",           // 主要的MiniProfiler头
+                    "x-miniprofiler-ids",           // 小写版本
+                    "X-MINIPROFILER-IDS",           // 大写版本
+                    "miniprofiler-ids"              // 备用名称
+                ); ;
+            });
+        });
+        services.AddEFSecondLevelCache(options => options.UseCustomCacheProvider<EFCoreCacheProvider>(CacheExpirationMode.Absolute, TimeSpan.FromMinutes(15)).SkipCacheInvalidationCommands(s => Regex.IsMatch(s, "ViewCount|DisplayCount|LinkLoopback|LoginRecord|ClickRecord|VisitRecord|SearchDetails")).UseCacheKeyPrefix("EFCache:"));
+        services.AddDbContext<DataContext>((serviceProvider, opt) => opt.UseNpgsql(AppConfig.ConnString, builder => builder.EnableRetryOnFailure(10)).EnableSensitiveDataLogging().AddInterceptors(serviceProvider.GetRequiredService<SecondLevelCacheInterceptor>())); //配置数据库
+        services.AddDbContext<LoggerDbContext>(opt => opt.UseNpgsql(AppConfig.ConnString)); //配置数据库
+        services.ConfigureOptions();
+        services.AddHttpsRedirection(options =>
+        {
+            options.RedirectStatusCode = StatusCodes.Status301MovedPermanently;
+        });
+        services.AddSession().AddAntiforgery(); //注入Session
+        services.AddResponseCache();
+        services.AddHangfireServer().AddHangfire((serviceProvider, configuration) =>
+        {
+            configuration.UseActivator(new HangfireActivator(serviceProvider));
+            configuration.UseFilter(new AutomaticRetryAttribute());
+            configuration.UseMemoryStorage();
+        }); //配置hangfire
+
+        services.AddSevenZipCompressor().AddResumeFileResult().AddSearchEngine<DataContext>(new LuceneIndexerOptions()
+        {
+            Path = "lucene"
+        }); // 配置7z和断点续传和Redis和Lucene搜索引擎
+
+        services.SetupHttpClients(Configuration);
+        services.AddMailSender(Configuration).AddFirewallReporter(Configuration).AddRequestLogger(Configuration).AddPerfCounterManager(Configuration);
+        services.AddBundling().UseDefaults(_env).UseNUglify().EnableMinification().EnableChangeDetection().EnableCacheHeader(TimeSpan.FromHours(1));
+        services.AddSingleton<IRedisClient>(new RedisClient(AppConfig.Redis)
+        {
+            Serialize = JsonConvert.SerializeObject,
+            Deserialize = JsonConvert.DeserializeObject
+        });
+        services.SetupMiniProfile();
+        services.AddSingleton<IMimeMapper, MimeMapper>(_ => new MimeMapper());
+        services.AutoRegisterServices();
+        services.AddRazorPages();
+        services.AddServerSideBlazor();
+        services.AddMyMvc().AddHealthChecks();
+        services.AddHttpContextAccessor();
+        services.AddReverseProxy().LoadFromConfig(Configuration.GetSection("ReverseProxy")).ConfigureHttpClient((context, handler) =>
+        {
+            handler.AllowAutoRedirect = true;
+            handler.AutomaticDecompression = DecompressionMethods.All;
+            handler.UseCookies = true;
+            handler.UseProxy = true;
+        });
+        services.AddHttpForwarder();
+    }
+
+    public void ConfigureContainer(ContainerBuilder builder)
+    {
+        builder.RegisterModule(new AutofacModule());
+    }
+
+    /// <summary>
+    /// Configure
+    /// </summary>
+    /// <param name="app"></param>
+    /// <param name="env"></param>
+    /// <param name="hangfire"></param>
+    /// <param name="luceneIndexerOptions"></param>
+    /// <param name="maindb"></param>
+    /// <param name="loggerdb"></param>
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env, IHangfireBackJob hangfire, LuceneIndexerOptions luceneIndexerOptions, DataContext maindb, LoggerDbContext loggerdb)
+    {
+        maindb.Database.EnsureCreated();
+        loggerdb.Database.EnsureCreated();
+        app.InitSettings();
+        app.UseRedisSession();
+        app.UseDisposeScope();
+        app.UseLuceneSearch(env, hangfire, luceneIndexerOptions);
+        app.UseForwardedHeaders().UseCertificateForwarding(); // X-Forwarded-For
+        if (env.IsDevelopment())
+        {
+            app.UseDeveloperExceptionPage();
+        }
+        else
+        {
+            app.UseExceptionHandler("/ServiceUnavailable");
+        }
+        app.UseBundles();
+        app.SetupHttpsRedirection(Configuration);
+        app.UseDefaultFiles().UseStaticFiles();
+        app.UseSession().UseCookiePolicy(); //注入Session
+        app.UseWhen(c => c.Session.Get<UserInfoDto>(SessionKey.UserInfo)?.IsAdmin == true, builder =>
+        {
+            builder.UseMiniProfiler();
+            builder.UseCLRStatsDashboard();
+        });
+        app.UseWhen(c => !c.Request.Path.StartsWithSegments("/_blazor"), builder => builder.UseMiddleware<RequestInterceptMiddleware>()); //启用网站请求拦截
+        app.SetupHangfire();
+        app.UseResponseCaching().UseResponseCompression(); //启动Response缓存
+        app.UseMiddleware<TranslateMiddleware>();
+#if DEBUG
+        app.UseCors("AllowAny");
+#endif
+        app.UseRouting().UseBodyOrDefaultModelBinder().UseEndpoints(endpoints =>
+        {
+            endpoints.MapBlazorHub(options =>
+            {
+                options.ApplicationMaxBufferSize = 4194304;
+                options.LongPolling.PollTimeout = TimeSpan.FromSeconds(10);
+                options.TransportMaxBufferSize = 8388608;
+            });
+            endpoints.MapHealthChecks("/health");
+            endpoints.MapControllers(); // 属性路由
+            endpoints.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}"); // 默认路由
+            endpoints.MapFallbackToController("Index", "Error");
+            endpoints.MapReverseProxy();
+        });
+
+        Console.WriteLine("网站启动完成");
+        var redisClient = app.ApplicationServices.GetRequiredService<IRedisClient>();
+        var keys = redisClient.Keys("*Online*");
+        if (keys.Length > 0)
+        {
+            redisClient.Del(keys);
+        }
+    }
+}

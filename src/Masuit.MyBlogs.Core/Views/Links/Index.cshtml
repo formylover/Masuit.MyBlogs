@@ -1,0 +1,84 @@
+﻿@using Masuit.MyBlogs.Core.Models.DTO
+@model IEnumerable<Masuit.MyBlogs.Core.Models.DTO.LinksDto>
+@{
+  ViewBag.Title = "友情链接大全";
+  Layout = "~/Views/Shared/_Layout.cshtml";
+}
+<link href="~/Content/common/btnstyle.css" rel="stylesheet"/>
+<div class="main-container min-height610" id="linksApp">
+  <ol class="breadcrumb">
+    <li>
+      <a asp-action="Index" asp-controller="Home">首页</a>
+    </li>
+    <li class="current">
+      <em>@ViewBag.Title</em>
+    </li>
+  </ol>
+  <header class="page-header text-center">
+    <h2 class="size48">友情链接</h2>
+  </header>
+  <div class="copyright-card">
+    @Html.Raw(ViewBag.Html)
+  </div>
+  <section>
+    <div class="button-effect">
+      @foreach (var link in Model) {
+        <a class="effect effect-5" href="@link.Url" referrerpolicy="unsafe-url" target="_blank" title="@link.Name">@link.Name</a>
+      }
+      <a @@click="showModal=true" class="effect effect-5">👉点我自助申请友链👈</a>
+    </div>
+  </section>
+  <hr class="margin-top10 marginbot10"/>
+  @{
+    await Html.RenderPartialAsync("_ArticleListAdvertisement", (AdvertisementDto) ViewBag.Ads);
+  }
+  <n-modal :mask-closable="false" :style="{ width: '50vw' }" @@positive-click="submit(link)" negative-text="取消" positive-text="提交" preset="dialog" style="min-width:400px" title="申请友情链接" v-model:show="showModal">
+    <div class="input-group">
+      <span class="input-group-addon">网站名称</span>
+      <input autofocus class="form-control" placeholder="您的网站名称" v-model="link.Name">
+    </div>
+    <div class="input-group">
+      <span class="input-group-addon">链接地址</span>
+      <input class="form-control" placeholder="https://masuit.com/links" v-model="link.Url">
+    </div>
+    <div class="input-group">
+      <span class="input-group-addon">主页地址</span>
+      <input class="form-control" placeholder="https://masuit.com" v-model="link.UrlBase">
+    </div>
+  </n-modal>
+</div>
+<script>
+const { createApp, ref, onMounted, watch, computed } = Vue;
+createApp({
+  setup() {
+    const link = ref({
+      Name: '',
+      Url: '',
+      UrlBase: ''
+    });
+    const showModal = ref(false);
+    return {
+      link,
+      showModal
+    };
+  },
+  methods: {
+    submit() {
+      axios.post('/links/apply', this.link).then(res => {
+        if (res.data.Success) {
+          this.showModal = false;
+          this.link = {
+            Name: '',
+            Url: '',
+            UrlBase: ''
+          };
+          message.success(res.data.Message);
+          location.reload();
+        } else {
+          message.error(res.data.Message);
+        }
+      });
+    }
+  }
+}).use(naive).mount('#linksApp');
+</script>

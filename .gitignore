@@ -265,3 +265,16 @@ __pycache__/
 lucenedir
 /Masuit.MyBlogs.WebApp/upload
 Test
+/Masuit.LuceneEFCore.SearchEngine
+/Masuit.Tools
+/src/Masuit.MyBlogs.Core/lucene
+/src/Masuit.MyBlogs.Core/appsettings.prod.json
+/src/Masuit.MyBlogs.Core/Controllers/TestController.cs
+/src/Masuit.MyBlogs.Core/*.DotSettings
+/src/Masuit.MyBlogs.Core/TokenCache.bin
+/src/Masuit.MyBlogs.Core/OneDrive.db
+/src/Masuit.MyBlogs.Core/App_Data/OneDrive.template.db
+/src/Masuit.MyBlogs.Core/App_Data/OneDrive.db
+/src/Masuit.MyBlogs.Core/.config
+static
+/front/public/test.html

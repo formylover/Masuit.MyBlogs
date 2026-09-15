@@ -1,0 +1,90 @@
+﻿@{
+  ViewBag.Title = "投稿";
+  Layout = "~/Views/Shared/_Layout.cshtml";
+}
+<script src="~/UEditorPlus/ueditor.config.front.js"></script>
+<script charset="utf-8" src="~/UEditorPlus/ueditor.all.js" type="text/javascript"></script>
+<script charset="utf-8" src="~/UEditorPlus/lang/zh-cn/zh-cn.js" type="text/javascript"></script>
+<div class="container" id="publishApp">
+  <ol class="breadcrumb">
+    <li>
+      <a asp-action="Index" asp-controller="Home">首页</a>
+    </li>
+    <li class="current">
+      <em>@ViewBag.Title</em>
+    </li>
+  </ol>
+  <p class="size20 text-red">
+    投稿须知：投稿前请先站内搜索同类文章进行编辑修改操作，本页的重复投稿将不会接受，作直接删除处理！
+    <br/>
+    投稿通过后若文章的内容有任何更新，请及时修改更新，若后期发现内容有更新而长期未更新的，作删除处理！
+    <br/>
+    投稿通过后若文章的评论区有任何问题，长期未回复解释情况的，文章将作删除处理！
+  </p>
+  <hr/>
+  <form class="form-group" id="article-form" method="post" onsubmit="return false">
+    @*文章表单*@
+    @Html.AntiForgeryToken()
+    <div class="input-group">
+      <span class="input-group-addon size18">
+        <label for="article">文章标题：</label>
+      </span>
+      <input class="form-control input-lg" id="article" placeholder="请输入文章标题" required type="text" v-model="post.Title">
+      <span class="input-group-btn" v-if="post.Title">
+        <a :href="`/s/${post.Title}`" class="btn btn-info btn-lg" target="_blank">
+          检索同类资源
+        </a>
+      </span>
+    </div>
+    <!-- 加载编辑器的容器 -->
+    <div class="animated bounceInDown form-group overlay">
+      <div class="ueditor" id="editor"></div>
+    </div>
+    <div class="row">
+      <div class="col-md-6 col-sm-6">
+        <div class="input-group">
+          <span class="input-group-addon">分类：</span>
+          <n-select :options="categories" label-field="Name" style="width: auto" v-model:value="post.CategoryId" value-field="Id"/>
+        </div>
+      </div>
+      <div class="col-md-6 col-sm-6">
+        <div class="input-group">
+          <span class="input-group-addon">
+            <label for="Author">作者：</label>
+          </span>
+          <input class="form-control" id="Author" placeholder="投稿人名字(非常重要)" required type="text" v-model="post.Author">
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-6 col-sm-6">
+        <div class="input-group">
+          <span class="input-group-addon">
+            <label for="Email">邮箱：</label>
+          </span>
+          <input class="form-control" id="Email" placeholder="您的电子邮箱(非常重要)" required type="email" v-model="post.Email">
+          <span class="input-group-btn">
+            <button :disabled="disableGetcode||!post.Email" @@click="getcode(post.Email)" class="btn btn-danger" type="button">
+              {{codeMsg}}
+            </button>
+          </span>
+        </div>
+      </div>
+      <div class="col-md-6 col-sm-6">
+        <div class="input-group">
+          <span class="input-group-addon">
+            <label for="Code">验证码：</label>
+          </span>
+          <input class="form-control" id="Code" placeholder="验证码" required type="text" v-model="post.Code">
+          <span class="input-group-btn">
+            <button :disabled="submitting||!post.Content" @@click="submit" class="btn btn-info" type="submit">
+              <i class="icon-rocket2"></i>
+              马上投递
+            </button>
+          </span>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+<script src="~/Scripts/publish/publish.js"></script>

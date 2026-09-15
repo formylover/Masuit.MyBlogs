@@ -1,0 +1,168 @@
+﻿@using Masuit.MyBlogs.Core.Common
+@using Masuit.MyBlogs.Core.Models.DTO
+@model Masuit.MyBlogs.Core.Models.ViewModel.HomePageViewModel
+<aside class="sidebar">
+  <!-- 公告列表卡片 -->
+@if (Model.Notices.Count>0)
+{
+    <section class="announcement-card">
+        <div class="announcement-header">
+            <div class="announcement-title">近期公告</div>
+            <a asp-action="Index" asp-controller="Notice" class="all-announcement-btn">所有公告</a>
+        </div>
+        <ul class="announcement-list">
+            @foreach (NoticeDto notice in Model.Notices)
+            {
+                <li class="announcement-item">
+                    <a asp-action="Details" asp-controller="Notice" asp-route-id="@notice.Id">@await notice.Content.GetSummary(45, 2)</a>
+                </li>
+            }
+        </ul>
+    </section>
+}
+  
+  <div class="sidebar-header">
+    <h2 class="sidebar-title">文章分类</h2>
+    <a asp-action="All" asp-controller="Post" class="all-category-btn">所有分类</a>
+  </div>
+  <nav class="category-list">
+    <ul class="category-tree">
+      @foreach (var cat in Model.Categories) {
+        <li class="category-node">
+          <div class="category-item">
+            <div class="category-main">
+              <a asp-action="Category" asp-controller="Home" asp-route-id="@cat.Id" class="category-link">@cat.Name</a>
+            </div>
+            <div class="category-actions">
+              @if (CommonHelper.SystemSettings.GetOrAdd("EnableRss", "true") == "true") {
+                <a asp-action="CategoryRss" asp-controller="Subscribe" asp-route-id="@cat.Id" class="category-btn subscribe" target="_blank">
+                  <i class="icon-rss4"></i>
+                </a>
+              }
+              <a class="block category-btn" onclick='blockCategory("@cat.Id","@cat.Name")'>
+                <i class="icon-blocked"></i>
+              </a>
+            </div>
+          </div>
+          @if (cat.Children != null && cat.Children.Any()) {
+            <ul class="category-branch">
+              @foreach (var subcat in cat.Children) {
+                <li class="category-node">
+                  <div class="category-item">
+                    <div class="category-main">
+                      <a asp-action="Category" asp-controller="Home" asp-route-id="@subcat.Id" class="category-link">@subcat.Name</a>
+                    </div>
+                    <div class="category-actions">
+                      @if (CommonHelper.SystemSettings.GetOrAdd("EnableRss", "true") == "true") {
+                        <a asp-action="CategoryRss" asp-controller="Subscribe" asp-route-id="@subcat.Id" class="category-btn subscribe" target="_blank">
+                          <i class="icon-rss4"></i>
+                        </a>
+                      }
+                      <a class="block category-btn" onclick='blockCategory("@subcat.Id","@subcat.Name")'>
+                        <i class="icon-blocked"></i>
+                      </a>
+                    </div>
+                  </div>
+                  @if (subcat.Children != null && subcat.Children.Any()) {
+                    <ul class="category-branch">
+                      @foreach (var subsubcat in subcat.Children) {
+                        <li class="category-node">
+                          <div class="category-item">
+                            <div class="category-main">
+                              <a asp-action="Category" asp-controller="Home" asp-route-id="@subsubcat.Id" class="category-link">@subsubcat.Name</a>
+                            </div>
+                            <div class="category-actions">
+                              @if (CommonHelper.SystemSettings.GetOrAdd("EnableRss", "true") == "true") {
+                                <a asp-action="CategoryRss" asp-controller="Subscribe" asp-route-id="@subsubcat.Id" class="category-btn subscribe" target="_blank">
+                                  <i class="icon-rss4"></i>
+                                </a>
+                              }
+                              <a class="block category-btn" onclick='blockCategory("@subsubcat.Id","@subsubcat.Name")'>
+                                <i class="icon-blocked"></i>
+                              </a>
+                            </div>
+                          </div>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </li>
+      }
+    </ul>
+  </nav>
+  <!-- 侧边栏广告卡片 -->
+  @foreach (var ad in Model.SidebarAds) {
+    <a asp-action="Redirect" asp-controller="Advertisement" asp-route-id="@ad.Id" target="_blank">
+      <div class="sidebar-ad-card">
+        <div class="sidebar-ad-cover">
+          <img alt="@ad.Title" decoding="async" src="@(ad.ThumbImgUrl + "?width=300&format=webp&quality=50")" title="@ad.Title"/>
+        </div>
+        <div class="sidebar-ad-summary"> @ad.Title </div>
+      </div>
+    </a>
+  }
+  <!-- 推荐文章top5列表卡片 -->
+  <section class="top-articles-card">
+    <div class="top-articles-header">
+      <div class="top-articles-title">推荐文章</div>
+      @* <button class="all-top-articles-btn">全部推荐</button> *@
+    </div>
+    <ul class="top-articles-list">
+      @foreach (PostDto post in Model.Top5Post) {
+        <li>
+          <a asp-action="Details" asp-controller="Post" asp-route-id="@post.Id" class="top-article-item">
+            <span class="top-article-title">@post.Title</span>
+            <span class="top-article-views">
+              <span class="icon">👁️</span> @post.TotalViewCount
+            </span>
+          </a>
+        </li>
+      }
+    </ul>
+  </section>
+  <!-- 热搜标签卡片 begin -->
+  <section class="hot-search-tags-card">
+    <div class="hot-search-tags-header">
+      <div class="hot-search-tags-title">近期热搜标签</div>
+    </div>
+    <ul class="hot-search-tags-list">
+      @foreach (var s in Model.HotSearch) {
+        <li>
+          <a asp-action="Search" asp-controller="Search" asp-route-wd="@s.Keywords" class="hot-search-tag-item">
+            <span class="hot-search-tag-keyword">@s.Keywords</span>
+            <span class="hot-search-tag-count">
+              <span class="icon">🔥</span> @s.Count
+            </span>
+          </a>
+        </li>
+      }
+    </ul>
+  </section>
+  <!-- 热搜标签卡片 end -->
+  <!-- 标签云卡片 begin -->
+  <section class="tag-cloud-card">
+    <div class="tag-cloud-header">
+      <div class="tag-cloud-title">标签云</div>
+      <a href="/all" target="_blank">
+        <button class="all-tags-btn tag-cloud-btn">所有标签</button>
+      </a>
+    </div>
+    <div class="tag-cloud">
+      @{
+        int index = 1;
+        foreach (var (key, value) in Model.Tags) {
+          <a asp-action="Tag" asp-controller="Home" asp-route-tag="@key" class="tag-cloud-item tag@(index++)">@key (@value)</a>
+        }
+      }
+    </div>
+    <form action="/tags" autocomplete="off" class="tag-search-box" method="get">
+      <input class="tag-search-input" maxlength="48" name="tag" placeholder="搜索标签..." required type="text"/>
+      <button class="tag-search-btn" type="submit">搜索</button>
+    </form>
+  </section>
+  <!-- 标签云卡片 end -->
+</aside>

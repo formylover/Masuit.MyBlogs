@@ -1,0 +1,331 @@
+﻿@inject IMenuService MenuService;
+@inject ILinksService LinksService;
+@using Masuit.MyBlogs.Core.Common
+@using Masuit.MyBlogs.Core.Infrastructure.Services.Interface
+@using Masuit.MyBlogs.Core.Models.DTO
+@using Masuit.MyBlogs.Core.Models.Entity
+@using Masuit.MyBlogs.Core.Models.Enum
+@using Masuit.MyBlogs.Core.Models.ViewModel
+@using Masuit.Tools
+@using Masuit.Tools.Core.Net
+@using Microsoft.AspNetCore.Http.Extensions
+@using Masuit.Tools.AspNetCore.Extensions
+@using EFCoreSecondLevelCacheInterceptor
+@using Masuit.Tools.Models
+@using Dispose.Scope
+@{
+  var menus = MenuService.GetQueryNoTracking(m => m.Status == Status.Available, m => m.Sort).Cacheable().ToTree(m => m.Id, m => m.ParentId);
+  var user = Context.Session.Get<UserInfoDto>(SessionKey.UserInfo) ?? new UserInfoDto();
+  var links = LinksService.GetQuery(l => l.Status == Status.Available).OrderByDescending(l => l.Recommend).ThenByDescending(l => l.Loopbacks.GroupBy(x => x.IP).Count()).Take(30).Select(e => new {
+    e.Url,
+    e.Name
+  }).Cacheable().ToPooledListScope();
+}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta content='zh-CN' http-equiv='content-language'>
+  <meta content="IE=edge" http-equiv="X-UA-Compatible">
+  <meta content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+  <meta content="text/html; charset=UTF-8" http-equiv="Content-Type">
+  <title>@(ViewBag.Title + "_" + CommonHelper.SystemSettings["Title"])</title>
+  <meta content="@(CommonHelper.SystemSettings["Keyword"] + "," + ViewBag.Keyword)" name="keywords"/>
+  <meta content="@ViewBag.Desc" name="description"/>
+  <meta content="telephone=no" name="format-detection">
+  <meta content="#ffffff" name="theme-color">
+  <meta content="summary" name="twitter:card">
+  <meta content="@(ViewBag.Title + "_" + CommonHelper.SystemSettings["Title"])" property="og:title">
+  <meta content="@ViewBag.Desc" property="og:description">
+  <meta content="website" property="og:type">
+  <meta content="@ViewData.GetValueOrDefault("cover", () => "/favicon.png")" property="og:image"/>
+  <meta content="@ViewBag.Desc" property="og:image:alt"/>
+  <meta content="zh_CN" property="og:locale">
+  <meta content="@ViewData.GetValueOrDefault(nameof(Post.Author), () => CommonHelper.SystemSettings["Title"])" property="og:author"/>
+  <meta content="@ViewData.GetValueOrDefault(nameof(Post.PostDate), () => DateTime.Now).ToString("yyyy-MM-dd HH:mm:ss")" property="og:release_date"/>
+  <meta content="@ViewData.GetValueOrDefault(nameof(Post.Author), () => CommonHelper.SystemSettings["Title"])" property="article:author"/>
+  <meta content="@ViewData.GetValueOrDefault(nameof(Post.PostDate), () => DateTime.Now).ToString("yyyy-MM-dd HH:mm:ss")" property="article:published_time">
+  <meta content="@ViewData.GetValueOrDefault(nameof(Post.ModifyDate), () => DateTime.Now).ToString("yyyy-MM-dd HH:mm:ss")" property="article:modified_time">
+  <link href="@Context.Request.GetEncodedUrl()" rel="canonical">
+  @Html.Raw(CommonHelper.SystemSettings.GetOrAdd("Styles", ""))
+  <link async defer href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css" rel="stylesheet">
+  <link async defer href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <link async defer href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/css/bootstrap.min.css" rel="stylesheet">
+  <environment names="Development">
+    <link href="~/fonts/icomoon.css" rel="stylesheet"/>
+    <link href="~/Content/common/reset.css" rel="stylesheet"/>
+    <link href="~/Content/common/style.css" rel="stylesheet"/>
+    <link href="~/Assets/nav/css/style.css" rel="stylesheet"/>
+  </environment>
+  <environment names="Stage,Production">
+    @await Styles.RenderAsync("~/bundles/main.css")
+  </environment>
+  <environment names="Development">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.5.16/dist/vue.global.js"></script>
+  </environment>
+  <environment names="Stage,Production">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.5.16/dist/vue.global.prod.js"></script>
+  </environment>
+  <script src="https://cdn.jsdelivr.net/npm/naive-ui"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script async src="https://cdnjs.cloudflare.com/ajax/libs/lazysizes/5.3.2/lazysizes.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-cookie/3.0.1/js.cookie.min.js"></script>
+  <script src="~/Scripts/layer/layer.js"></script>
+  <script src="~/Scripts/platform.js"></script>
+  <environment names="Development">
+    <script src="~/Scripts/ripplet.js"></script>
+    <script src="~/Scripts/global/functions.js"></script>
+    <script src="~/Scripts/global/scripts.js"></script>
+    <script src="~/Assets/tagcloud/js/tagcloud.js"></script>
+    <script src="~/Assets/scrolltop/js/scrolltop.js"></script>
+    <script src="~/Assets/nav/js/main.js"></script>
+  </environment>
+  <environment names="Stage,Production">
+    @await Scripts.RenderAsync("~/bundles/main.js")
+  </environment>
+</head>
+<body>
+@if (!Context.Request.IsRobot()) {
+  <noscript>
+    <meta content="3;url=/ServiceUnavailable" http-equiv="Refresh"/>
+    <style>
+            .header {
+                display: none !important;
+            }
+        </style>
+    <div style="position: absolute;top: 0;left: 0;right: 0;bottom: 0;">
+      <p class="size48">检测到您的浏览器不支持javascript或已禁用javascript功能，当前页面无法正常显示！</p>
+    </div>
+  </noscript>
+}
+<div id="toc"></div>
+<div class="header">
+  <header class="cd-main-header">
+    <a class="cd-logo" href="/">
+      <img alt="@CommonHelper.SystemSettings["Title"]" decoding="async" src="@CommonHelper.SystemSettings["logo"]">
+      <h1 class="slogan">@CommonHelper.SystemSettings["Slogan"]</h1>
+    </a>
+    <ul class="cd-header-buttons">
+      <li>
+        <a class="cd-search-trigger" href="#cd-search">
+          搜索
+          <span></span>
+        </a>
+      </li>
+      <li>
+        <a class="cd-nav-trigger" href="#cd-primary-nav">
+          菜单
+          <span></span>
+        </a>
+      </li>
+    </ul>
+  </header>
+  <nav class="cd-nav">
+    <ul class="cd-primary-nav is-fixed" id="cd-primary-nav">
+      @{
+        if (user.IsAdmin) {
+          <li>
+            <a href="/dashboard/posts/write" target="_blank">
+              <i class="icon icon-pencil"></i>
+              写文章
+            </a>
+          </li>
+          <li>
+            <a asp-action="Index" asp-controller="Dashboard" target="_blank">控制面板</a>
+          </li>
+          <li>
+            <a> | </a>
+          </li>
+        }
+
+        foreach (var m in menus) {
+          if (m.MenuType == MenuType.SubMenu) {
+            <li class="has-children">
+              <a href="#">@m.Name</a>
+              <ul class="cd-secondary-nav is-hidden">
+                <li class="go-back">
+                  <a href="#">上级菜单</a>
+                </li>
+                <li class="see-all">
+                  <a asp-action="All" asp-controller="Post">所有 @m.Name</a>
+                </li>
+                @foreach (var m2 in m.Children.OrderBy(c => c.Sort)) {
+                  if (m2.Children.Any()) {
+                    <li class="has-children">
+                      <a href="#">@m2.Name</a>
+                      <ul class="is-hidden">
+                        <li class="go-back">
+                          <a href="#">上级菜单</a>
+                        </li>
+                        @foreach (var m3 in m2.Children.OrderBy(c => c.Sort)) {
+                          if (m3.Children.Any()) {
+                            <li class="has-children">
+                              <a href="#">@m3.Name</a>
+                              <ul class="is-hidden">
+                                <li class="go-back">
+                                  <a href="#">上级菜单</a>
+                                </li>
+                                @foreach (var m4 in m.Children.OrderBy(c => c.Sort)) {
+                                  if (m4.NewTab) {
+                                    <li>
+                                      <a href="@m4.Url" target="_blank">@m4.Name</a>
+                                    </li>
+                                  } else {
+                                    <li>
+                                      <a href="@m4.Url">@m4.Name</a>
+                                    </li>
+                                  }
+                                }
+                              </ul>
+                            </li>
+                          } else {
+                            if (m3.NewTab) {
+                              <li>
+                                <a href="@m3.Url" target="_blank">@m3.Name</a>
+                              </li>
+                            } else {
+                              <li>
+                                <a href="@m3.Url">@m3.Name</a>
+                              </li>
+                            }
+                          }
+                        }
+                      </ul>
+                    </li>
+                  } else {
+                    if (m2.NewTab) {
+                      <li>
+                        <a href="@m2.Url" target="_blank">@m2.Name</a>
+                      </li>
+                    } else {
+                      <li>
+                        <a href="@m2.Url">@m2.Name</a>
+                      </li>
+                    }
+                  }
+                }
+              </ul>
+            </li>
+          } else if (m.MenuType == MenuType.GalleryMenu) {
+            <li class="has-children">
+              <a href="#">@m.Name</a>
+              <ul class="cd-nav-gallery is-hidden">
+                <li class="go-back">
+                  <a href="#">返回主菜单</a>
+                </li>
+                <li class="see-all">
+                  <a asp-action="All" asp-controller="Post">所有 @m.Name</a>
+                </li>
+                @{
+                  foreach (var mm in m.Children) {
+                    if (mm.NewTab) {
+                      <li>
+                        <a class="cd-nav-item" href="@mm.Url" target="_blank">
+                          <img alt="@mm.Name" decoding="async" src="@mm.Icon">
+                          <h3>@mm.Name</h3>
+                        </a>
+                      </li>
+                    } else {
+                      <li>
+                        <a class="cd-nav-item" href="@mm.Url">
+                          <img alt="@mm.Name" decoding="async" src="@mm.Icon">
+                          <h3>@mm.Name</h3>
+                        </a>
+                      </li>
+                    }
+                  }
+                }
+              </ul>
+            </li>
+          } else if (m.MenuType == MenuType.IconMenu) {
+            <li class="has-children">
+              <a href="#">@m.Name</a>
+              <ul class="cd-nav-icons is-hidden">
+                <li class="go-back">
+                  <a href="#">返回主菜单</a>
+                </li>
+                @{
+                  var step = 1;
+                  foreach (var mm in m.Children) {
+                    if (mm.NewTab) {
+                      <li>
+                        <a class="cd-nav-item item-@(step++ % 8)" href="@mm.Url" target="_blank">
+                          <p>@mm.Name</p>
+                        </a>
+                      </li>
+                    } else {
+                      <li>
+                        <a class="cd-nav-item item-@(step++ % 8)" href="@mm.Url">
+                          <p>@mm.Name</p>
+                        </a>
+                      </li>
+                    }
+                  }
+                }
+              </ul>
+            </li>
+          } else {
+            if (m.NewTab) {
+              <li>
+                <a href="@m.Url" target="_blank">@m.Name</a>
+              </li>
+            } else {
+              <li>
+                <a href="@m.Url">@m.Name</a>
+              </li>
+            }
+          }
+        }
+      }
+    </ul>
+  </nav>
+  <div class="cd-search" id="cd-search">
+    <form action="/search" method="get">
+      <input name="wd" placeholder="请在此处输入您想要的搜索的关键词，支持部分指令：intitle，content，如：intitle:会声会影 content:懒得勤快，指令支持组合" type="search">
+    </form>
+  </div>
+  <main class="cd-main-content">
+    @RenderBody()
+    <div class="cd-overlay"></div>
+    <footer class="site-footer">
+      <div class="footer-container">
+        <div class="footer-links">
+          <span class="footer-label">友情链接：</span>
+          @{
+            if (user.IsAdmin) {
+              <a asp-action="FileManager" asp-controller="Dashboard" target="_blank">资源管理器</a>
+              <span> | </span>
+              <a href="/taskcenter" target="_blank">任务管理器</a>
+              <span> | </span>
+            }
+
+            foreach (var link in links) {
+              <a href="@link.Url" referrerpolicy="unsafe-url" target="_blank">@link.Name</a>
+              <span> | </span>
+            }
+          }
+          <a asp-action="Index" asp-controller="Links">更多链接>></a>
+        </div>
+        <div class="footer-copyright">
+          @Html.Raw(CommonHelper.SystemSettings["Copyright"])
+          @Html.Raw(CommonHelper.SystemSettings.GetOrAdd("Scripts", ""))
+        </div>
+      </div>
+      <p style="display: table;margin-left:70px">
+            Ping:<span id="ping">50</span>ms
+        </p>
+    </footer>
+  </main>
+</div>
+@*返回顶部火箭*@
+<div class="hidden-xs" id="rocket-to-top" style="display: none;">
+  <div class="level-2" style="opacity: 0; display: block;"></div>
+  <div class="level-3"></div>
+</div>
+<button class="btn btn-info btn-sm canvas-close" style="position: fixed;right: 0;bottom: 0;z-index: 200;display: none" type="button">不再显示canvas背景</button>
+<script color="0,104,183" count="100" opacity='1' src="~/Scripts/line.js" type="text/javascript" zIndex="-1"></script>
+</body>
+</html>
+<mini-profiler max-traces="5"/>

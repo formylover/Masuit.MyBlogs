@@ -1,0 +1,83 @@
+﻿@using Collections.Pooled
+@using Masuit.MyBlogs.Core.Common
+@using Masuit.MyBlogs.Core.Models.DTO
+@using Masuit.MyBlogs.Core.Models.Entity
+@using Masuit.MyBlogs.Core.Models.ViewModel
+@using Masuit.Tools.Core.Net
+@using Microsoft.AspNetCore.Http
+@model Masuit.MyBlogs.Core.Models.ViewModel.HomePageViewModel
+@{
+  ViewBag.Title = "首页";
+  Layout = "~/Views/Shared/_Layout.cshtml";
+  PooledList<FastShare> shares = ViewBag.FastShare;
+  Context.Request.Path = new PathString("/posts");
+}
+<link href="~/Assets/banner/carousel.css" rel="stylesheet"/>
+
+@if (Model.Banner.Any())
+{
+    <div class="carousel" id="@SnowFlake.NewId" aria-roledescription="carousel">
+        <button class="nav prev" aria-label="上一张" data-dir="prev">‹</button>
+
+        <div class="slides">
+            @for (int i = 0; i < Model.Banner.Count; i++)
+            {
+                var item = Model.Banner[i];
+                if (i == 0)
+                {
+                    <a class="slide is-active" asp-controller="Advertisement" asp-action="Redirect" asp-route-id="@item.Id" target="_blank" rel="noopener" aria-label="@item.Title" title="@item.Title">
+                        <img src="@item.ImageUrl" alt="@item.Title" />
+                    </a>
+                }
+                else
+                {
+                    <a class="slide" asp-controller="Advertisement" asp-action="Redirect" asp-route-id="@item.Id" target="_blank" rel="noopener" aria-label="@item.Title" title="@item.Title">
+                        <img src="@item.ImageUrl" alt="@item.Title" />
+                    </a>
+                }
+            }
+        </div>
+        <div class="indicators" id="carousel-indicators" role="tablist" aria-label="轮播分页指示器"></div>
+        <button class="nav next" aria-label="下一张" data-dir="next">›</button>
+    </div>
+}
+<br/>
+@if (Model.Notices.Any()) {
+  <div class="list-container">
+    <div class="site-announcement-bar">
+      <div class="announcement-container">
+        <div class="announcement-header">
+          <span class="announcement-title">【公告】@Model.Notices[0].Title</span>
+          <span class="announcement-time">@Model.Notices[0].ModifyDate.ToString("yyyy-MM-dd")</span>
+        </div>
+        <div class="announcement-content">
+          @Html.Raw(Model.Notices[0].Content.Replace("img src=", $"img class='lazyload' title='{CommonHelper.SystemSettings["Title"]}' alt='{CommonHelper.SystemSettings["Title"]}' decoding='async' loading='lazy' data-src="))
+        </div>
+      </div>
+    </div>
+  </div>
+}
+@if (shares.Any()) {
+  <div class="list-container">
+    <div class="site-tips-bar">
+      <div class="site-tips-title">⚡小撇步Tips⚡</div>
+      <ul class="site-tips-list">
+        @foreach (var share in shares) {
+          <li class="site-tip-item">
+            @if (!string.IsNullOrEmpty(share.Link)) {
+              <a href="@share.Link" target="_blank">▸ @share.Title</a>
+              <a href="@share.Link" target="_blank">🔗</a>
+            } else {
+              <text>▸ @share.Title</text>
+            }
+          </li>
+        }
+      </ul>
+    </div>
+  </div>
+}
+@{
+  var user = Context.Session.Get<UserInfoDto>(SessionKey.UserInfo) ?? new UserInfoDto();
+  await Html.RenderPartialAsync(user.IsAdmin ? "_MainContainer_Admin" : "_MainContainer", Model);
+}
+<script src="~/Assets/banner/carousel.js"></script>

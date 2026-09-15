@@ -1,0 +1,60 @@
+﻿@using Masuit.MyBlogs.Core.Models.DTO
+@model IList<Masuit.MyBlogs.Core.Models.DTO.NoticeDto>
+@{
+  ViewBag.Title = "网站公告栏";
+  Layout = "~/Views/Shared/_Layout.cshtml";
+}
+<div class="container min-height610">
+  <ol class="breadcrumb">
+    <li>
+      <a asp-action="Index" asp-controller="Home">首页</a>
+    </li>
+    <li class="current">
+      <em>@ViewBag.Title</em>
+    </li>
+  </ol>
+  <a class="like-btn" href="/dashboard/notice/write">发布新公告</a>
+    <div class="main-container">
+        @foreach (var n in Model)
+        {
+            <div class="site-announcement-bar" style="margin:10px 0">
+            <div class="announcement-container">
+                <div class="announcement-header">
+                    <span class="announcement-title">@n.Title</span>
+                    <span class="announcement-time">@n.ModifyDate.ToString("yyyy-MM-dd")</span>
+                </div>
+                <div class="article-ops-row">
+                    <a class="article-op-btn" onclick="del(@n.Id,'@n.Title')">删除</a>
+                    <a class="article-op-btn" href="/dashboard/notice/write?id=@n.Id" target="_blank">修改</a>
+                </div>
+                <div class="announcement-content">
+                    @Html.Raw(n.Content.Replace("img src=", $"img class='lazyload' title='{CommonHelper.SystemSettings["Title"]}' alt='{CommonHelper.SystemSettings["Title"]}' decoding='async' loading='lazy' data-src="))
+                </div>
+            </div>
+        </div>
+        }
+        
+    </div>
+
+  @{
+    await Html.RenderPartialAsync("_Pagination", ViewData["page"]);
+    await Html.RenderPartialAsync("_ArticleListAdvertisement", (AdvertisementDto) ViewBag.Ads);
+  }
+</div>
+<script>
+    function del(id, title) {
+      dialog.warning({
+        title: "确认删除这条公告吗？",
+        content: title,
+        positiveText: '确定',
+        negativeText: '取消',
+        draggable: true,
+        onPositiveClick: () => {
+          axios.post("/notice/delete/"+id).then(res=>{
+            message.success('删除成功');
+            window.location.reload();
+          });
+        }
+      });
+    }
+</script>
